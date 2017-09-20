@@ -2,6 +2,11 @@ import boto3
 from gevent import sleep
 from worker import Worker
 
+user_data = """#!/bin/bash
+git -C /opt/wino pull
+/opt/wino/worker.py
+"""
+
 
 class Cluster(object):
     def __init__(self, ami, sgroup, region="ap-southeast-1"):
@@ -9,36 +14,56 @@ class Cluster(object):
         self.sg = sgroup
         self.ec2 = boto3.resource("ec2", region_name=region)
 
-    def launch_instances(self, ins_type="t2.micro", ins_num=1):
-        instances = self.ec2.create_instances(
+    def launch_vms(self, vm_type="t2.micro", vm_num=1):
+        vms = self.ec2.create_instances(
             ImageId=self.ami,
-            InstanceType=ins_type,
-            MinCount=ins_num,
-            MaxCount=ins_num,
+            InstanceType=vm_type,
+            MinCount=vm_num,
+            MaxCount=vm_num,
+            KeyName="research",
             SecurityGroupIds=[self.sg],
-            UserData=None)
-        ins_ids = [ins.instance_id for ins in instances]
-        while not all(self.instance_is_ready(ins_id) for ins_id in ins_ids):
+            UserData=user_data)
+        vids = [vm.instance_id for vm in vms]
+        while not all(self.vm_is_ready(vid) for vid in vids):
             sleep(1)
-        return ins_ids
+        return vids
 
-    def instance_is_ready(self, ins_id):
-        return self.ec2.Instance(ins_id).state["Code"] == 16
+    def vm_is_ready(self, vid):
+        return self.ec2.Instance(vid).state["Code"] == 16
 
-    def instance_ip(self, ins_id):
-        return self.ec2.Instance(ins_id).public_dns_name
+    def vm_ip(self, vid):
+        return self.ec2.Instance(vid).public_dns_name
 
-    def launch_workers(self, num, ins_type="t2.micro"):
+    def existing_vms(self, num=20):
+        vms = []
+        for vm in self.ec2.instances.filter(Filters=[{
+                "Name":
+                "instance-state-name",
+                'Values': ["running"]
+        }, {
+                "Name": "image-id",
+                'Values': [self.ami]
+        }]):
+            print("Existing VM found:", vm.instance_id)
+            vms.append(vm.instance_id)
+            if len(vms) == num:
+                break
+        return vms
+
+    def create_workers(self, num, vm_type="t2.micro"):
+        vms = self.existing_vms(num)
+        if len(vms) < num:
+            vms.extend(self.launch_vms(vm_type, num - len(vms)))
+            print("{} new VMs launched".format(num - len(vms)))
         workers = []
-        for _, ins_ips in self.launch_instances(ins_type, ins_type, num):
-            workers.append(Worker.client(ins_ips))
-        for worker in workers:
-            print(worker.hello())
+        for vid in vms:
+            ip = self.vm_ip(vid)
+            worker = Worker.client(ip)
+            print("{} from worker @ {}".format(worker.hello(), ip))
+            workers.append(worker)
         return workers
 
 
 if __name__ == "__main__":
-    cluster = Cluster("ami-10bb2373", "sg-c86bc4ae")
-    ins_ids = cluster.launch_instances(ins_num=2)
-    for iid in ins_ids:
-        print(iid, cluster.instance_ip(iid))
+    cluster = Cluster("ami-fd33459e", "sg-c86bc4ae")
+    cluster.create_workers(1)

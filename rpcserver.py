@@ -109,11 +109,24 @@ class RPCClient(object):
         self.cls = C
         self.keep_alive = keep_alive
         self.worker_addr = worker_addr
+        self.connect()
+
+    def connect(self):
+        try_times = 20
         if self.keep_alive:
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            sock.connect(worker_addr)
-            self.port = Port(sock)
+            while try_times:
+                try:
+                    sock.connect(self.worker_addr)
+                    break
+                except Exception:
+                    gevent.sleep(1)
+                    try_times -= 1
+            if try_times:
+                self.port = Port(sock)
+            else:
+                self.port = None
         else:
             self.port = None
 
@@ -121,13 +134,17 @@ class RPCClient(object):
         if self.port:
             self.port.close()
 
-    def __getattr__(self, func):
+    def get_port(self):
         if not self.port:
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             sock.connect(addr)
             port = Port(sock)
         else:
             port = self.port
+        return port
+
+    def __getattr__(self, func):
+        port = self.get_port()
 
         def call(**kwargs):
             for name, arg in kwargs.items():
@@ -135,10 +152,13 @@ class RPCClient(object):
                     kwargs[name] = arg.__dump__()
             st = port.write(dump((func, kwargs)))
             if st:
-                ret = load(port.read())
-                ret_cls = getattr(self.cls, func).__annotations__.get("return")
-                if ret_cls: ret = ret_cls.__load__(ret)
-                return ret
+                msg = port.read()
+                if msg:
+                    ret = load(msg)
+                    ret_cls = getattr(self.cls, func).__annotations__.get("return")
+                    if ret_cls: ret = ret_cls.__load__(ret)
+                    return ret
+            raise ConnectionError
 
         return call
 
@@ -147,8 +167,8 @@ class RPC(object):
     default_port = 10000
 
     @classmethod
-    def server(cls):
-        RPCServer(cls).run(cls.default_port)
+    def server(cls, *args):
+        RPCServer(cls, *args).run(cls.default_port)
 
     @classmethod
     def client(cls, addr, port=None, keep_alive=True):
