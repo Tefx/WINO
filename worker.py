@@ -28,7 +28,7 @@ class Data(Remotable):
         port = client.start_nc_server()
         cmd = "dd if=/dev/zero bs=1k count={} | nc -q 0 {} {}".format(
             ceil(self.size / 1024), target_addr, port)
-        proc = subprocess.run([cmd], shell=True, stderr=subprocess.DEVNULL)
+        proc = subprocess.run([cmd], shell=True)
 
 
 class Worker(RPC):

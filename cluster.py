@@ -1,5 +1,5 @@
 import boto3
-from gevent import sleep
+from gevent import pool, sleep
 from worker import Worker
 from monitor import Monitor
 
@@ -21,7 +21,7 @@ class Cluster(object):
             InstanceType=vm_type,
             MinCount=vm_num,
             MaxCount=vm_num,
-            KeyName="research",
+            # KeyName="research",
             SecurityGroupIds=[self.sg],
             UserData=user_data)
         vids = [vm.instance_id for vm in vms]
@@ -51,22 +51,23 @@ class Cluster(object):
                 break
         return vms
 
+    def get_worker_from_vm(self, vid):
+        print("Connecting to {} and updating workers".format(vid))
+        ip = self.vm_ip(vid)
+        monitor = Monitor.client(ip)
+        monitor.start_worker(update=True)
+        worker = Worker.client(ip)
+        # print("{} from worker @ {}".format(worker.hello(), vid))
+        return worker
+
     def create_workers(self, num, vm_type="t2.micro"):
         vms = self.existing_vms(num)
         if len(vms) < num:
             print("{} new VMs to launch".format(num - len(vms)))
             vms.extend(self.launch_vms(vm_type, num - len(vms)))
-        workers = []
-        for vid in vms:
-            ip = self.vm_ip(vid)
-            monitor = Monitor.client(ip)
-            monitor.start_worker(update=False)
-            worker = Worker.client(ip)
-            print("{} from worker @ {}".format(worker.hello(), ip))
-            workers.append(worker)
-        return workers
+        return pool.Group().map(self.get_worker_from_vm, vms)
 
 
 if __name__ == "__main__":
     cluster = Cluster("ami-fd33459e", "sg-c86bc4ae")
-    cluster.create_workers(1)
+    cluster.create_workers(2)

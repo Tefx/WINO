@@ -111,6 +111,10 @@ class RPCClient(object):
         self.worker_addr = worker_addr
         self.connect()
 
+    @property
+    def ip(self):
+        return self.worker_addr[0]
+
     def connect(self):
         try_times = 10
         if self.keep_alive:
