@@ -25,11 +25,11 @@ def test_cluster():
     start_time = timer()
     print(w0.hello(), w0.ip)
     print(w0.execution_task(task=Task(5)))
-    print(w0.send_file(data=Data(102400000000), target_addr=w0.ip))
+    print(w0.send_file(data=Data(1024000), target_addr=w0.ip))
     print(w0.execution_task(task=Task(2)))
     print("Makespan: {:.2f}s".format(timer() - start_time))
 
 
 if __name__ == "__main__":
-    test_monitor_and_worker()
-    # test_cluster()
+    # test_monitor_and_worker()
+    test_cluster()

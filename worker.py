@@ -67,8 +67,9 @@ class Data(Remotable):
         used_time = timer() - start_time
         server.join()
         sock.close()
-        print("Data transferred in {:.2f}s, {:.0f}MB/s".format(
-            used_time, self.size / (used_time * 1024 * 1024)))
+        print("{:.0f}MB data transferred in {:.2f}s, {:.0f}MB/s".format(
+            self.size / (1024 * 1024), used_time, self.size / (
+                used_time * 1024 * 1024)))
 
 
 class Worker(RPC):
