@@ -21,7 +21,7 @@ class Cluster(object):
             InstanceType=vm_type,
             MinCount=vm_num,
             MaxCount=vm_num,
-            # KeyName="research",
+            KeyName="research",
             SecurityGroupIds=[self.sg],
             UserData=user_data)
         vids = [vm.instance_id for vm in vms]
