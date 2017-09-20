@@ -1,8 +1,9 @@
 import boto3
 from gevent import sleep
+from worker import Worker
 
 
-class Controller(object):
+class Cluster(object):
     def __init__(self, ami, sgroup, region="ap-southeast-1"):
         self.ami = ami
         self.sg = sgroup
@@ -14,7 +15,8 @@ class Controller(object):
             InstanceType=ins_type,
             MinCount=ins_num,
             MaxCount=ins_num,
-            SecurityGroupIds=[self.sg])
+            SecurityGroupIds=[self.sg],
+            UserData=None)
         ins_ids = [ins.instance_id for ins in instances]
         while not all(self.instance_is_ready(ins_id) for ins_id in ins_ids):
             sleep(1)
@@ -23,7 +25,20 @@ class Controller(object):
     def instance_is_ready(self, ins_id):
         return self.ec2.Instance(ins_id).state["Code"] == 16
 
+    def instance_ip(self, ins_id):
+        return self.ec2.Instance(ins_id).public_dns_name
+
+    def launch_workers(self, num, ins_type="t2.micro"):
+        workers = []
+        for _, ins_ips in self.launch_instances(ins_type, ins_type, num):
+            workers.append(Worker.client(ins_ips))
+        for worker in workers:
+            print(worker.hello())
+        return workers
+
 
 if __name__ == "__main__":
-    controller = Controller("ami-10bb2373", "sg-c86bc4ae")
-    print(controller.launch_instances())
+    cluster = Cluster("ami-10bb2373", "sg-c86bc4ae")
+    ins_ids = cluster.launch_instances(ins_num=2)
+    for iid in ins_ids:
+        print(iid, cluster.instance_ip(iid))

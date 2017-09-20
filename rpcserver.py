@@ -76,7 +76,8 @@ class RPCServer(object):
                     1]))
         while True:
             sock, _ = listen_sock.accept()
-            proc = multiprocessing.Process(target=self.handle_let, args=(sock,))
+            proc = multiprocessing.Process(
+                target=self.handle_let, args=(sock, ))
             proc.start()
             # gevent.spawn(self.handle_let, sock)
 
@@ -91,16 +92,21 @@ class RPCServer(object):
 
     def handle(self, message):
         func, kwargs = load(message)
-        f = getattr(self.instance, func, lambda _: None)
-        ret = f(**kwargs)
-        return dump(ret)
+        print("calling {}".format(func))
+        func = getattr(self.instance, func, NotImplemented)
+        for name, arg in kwargs.items():
+            var_cls = func.__annotations__.get(name, None)
+            if hasattr(var_cls, "__load__"):
+                kwargs[name] = var_cls.__load__(arg)
+        res = func(**kwargs)
+        if hasattr(res, "__dump__"):
+            res = res.__dump__()
+        return dump(res)
 
 
 class RPCClient(object):
-    def __init__(self, C):
+    def __init__(self, C, worker_addr, keep_alive=True):
         self.cls = C
-
-    def connect(self, worker_addr, keep_alive=True):
         self.keep_alive = keep_alive
         self.worker_addr = worker_addr
         if self.keep_alive:
@@ -137,16 +143,32 @@ class RPCClient(object):
         return call
 
 
-def rpc_method(func):
-    @wraps(func)
-    def wrapped(self, **kwargs):
-        for name, arg in kwargs.items():
-            var_cls = func.__annotations__.get(name, None)
-            if hasattr(var_cls, "__load__"):
-                kwargs[name] = var_cls.__load__(arg)
-        res = func(self, **kwargs)
-        if hasattr(res, "__dump__"):
-            res = res.__dump__()
-        return res
+class RPC(object):
+    default_port = 10000
 
-    return wrapped
+    @classmethod
+    def server(cls):
+        RPCServer(cls).run(cls.default_port)
+
+    @classmethod
+    def client(cls, addr, port=None, keep_alive=True):
+        port = port or cls.default_port
+        return RPCClient(cls, (addr, port), keep_alive)
+
+    def hello(self):
+        return "Hello!"
+
+
+class Remotable(object):
+    state = ()
+
+    def __dump__(self):
+        return [getattr(self, s) for s in self.state]
+
+    @classmethod
+    def __load__(cls, state):
+        return cls(*state)
+
+    def __str__(self):
+        return "{}<{}>".format(self.__class__.__name__, ",".join(
+            "{}={}".format(s, getattr(self, s)) for s in self.state))
