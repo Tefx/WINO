@@ -57,7 +57,9 @@ class Data(Remotable):
         if not try_times: return False
         sock.sendall(struct.pack(HEADER_STRUCT, self.size))
         fsize = self.size
-        with open("./fakedata", "rb") as f:
+        fake_data_path = os.path.join(
+            os.path.abspath(os.path.dirname(__file__)), "fakedata")
+        with open(fake_data_path, "rb") as f:
             while fsize:
                 buf_size = fsize if fsize < FILE_UNIT_SIZE else FILE_UNIT_SIZE
                 f.seek(0)
@@ -103,7 +105,7 @@ class Worker(RPC):
         fsize = struct.unpack(HEADER_STRUCT, header)[0]
         buf = memoryview(bytearray(4096))
         while fsize:
-            fsize -= sock.recv_into(buf, min(fsize,4096))
+            fsize -= sock.recv_into(buf, min(fsize, 4096))
         sock.close()
 
     def send_file(self, data: Data, target_addr) -> Data:

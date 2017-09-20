@@ -31,5 +31,5 @@ def test_cluster():
 
 
 if __name__ == "__main__":
-    # test_monitor_and_worker()
-    test_cluster()
+    test_monitor_and_worker()
+    # test_cluster()
