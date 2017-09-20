@@ -176,7 +176,7 @@ class RPC(object):
         return RPCClient(cls, (addr, port), keep_alive)
 
     def hello(self):
-        return "Hello!"
+        return "Hello"
 
 
 class Remotable(object):
