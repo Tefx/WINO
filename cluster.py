@@ -22,8 +22,8 @@ class Cluster(object):
             MinCount=vm_num,
             MaxCount=vm_num,
             KeyName="research",
-            SecurityGroupIds=[self.sg],
-            UserData=user_data)
+            # UserData=user_data,
+            SecurityGroupIds=[self.sg])
         vids = [vm.instance_id for vm in vms]
         while not all(self.vm_is_ready(vid) for vid in vids):
             sleep(1)
@@ -69,6 +69,6 @@ class Cluster(object):
 
 
 if __name__ == "__main__":
-    cluster = Cluster("ami-fd33459e", "sg-c86bc4ae")
+    cluster = Cluster("ami-500b7d33", "sg-c86bc4ae")
     worker = cluster.create_workers(1)[0]
     print(worker.hello())

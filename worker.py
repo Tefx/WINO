@@ -5,6 +5,7 @@ import subprocess
 from gevent import socket
 from math import ceil
 from rpcserver import RPC, Remotable
+import os
 
 
 class Task(Remotable):
@@ -26,11 +27,10 @@ class Data(Remotable):
     def send(self, target_addr):
         client = Worker.client(target_addr)
         port = client.start_nc_server()
-        cmd = "/bin/dd if=/dev/zero bs=1k count={} | /bin/nc -vq 0 {} {}".format(
+        cmd = "dd if=/dev/zero bs=1k count={} | nc -vq 0 {} {}".format(
             ceil(self.size / 1024), target_addr, port)
-        print(cmd)
-        proc = subprocess.run([cmd], shell=True)
-        print(proc)
+        # proc = subprocess.run([cmd], shell=True)
+        os.system(cmd)
 
 
 class Worker(RPC):
