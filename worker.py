@@ -26,7 +26,7 @@ class Data(Remotable):
     def send(self, target_addr):
         client = Worker.client(target_addr)
         port = client.start_nc_server()
-        cmd = "dd if=/dev/zero bs=1k count={} | nc -q 0 {} {}".format(
+        cmd = "dd if=/dev/zero bs=1k count={} | nc -vq 0 {} {}".format(
             ceil(self.size / 1024), target_addr, port)
         proc = subprocess.run([cmd], shell=True)
 
@@ -53,7 +53,7 @@ class Worker(RPC):
     def start_nc_server(self):
         nc_port = self.pick_unused_port()
         self._nc_server = subprocess.Popen(
-            ["nc", "-l", str(nc_port)], stdout=subprocess.DEVNULL)
+            ["nc", "-vl", str(nc_port)], stdout=subprocess.DEVNULL)
         return nc_port
 
     def send_file(self, data: Data, target_addr) -> Data:

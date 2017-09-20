@@ -5,7 +5,7 @@ from monitor import Monitor
 
 user_data = """#!/bin/bash
 git -C /opt/wino pull
-/opt/wino/monitor.py /opt/wino/ > /wino.log
+/opt/wino/monitor.py /opt/wino/ > /wino.log 2>&1
 """
 
 
