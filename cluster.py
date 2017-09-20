@@ -1,10 +1,11 @@
 import boto3
 from gevent import sleep
 from worker import Worker
+from monitor import Monitor
 
 user_data = """#!/bin/bash
 git -C /opt/wino pull
-/opt/wino/worker.py
+/opt/wino/monitor.py /opt/wino/ > /wino.log
 """
 
 
@@ -53,11 +54,13 @@ class Cluster(object):
     def create_workers(self, num, vm_type="t2.micro"):
         vms = self.existing_vms(num)
         if len(vms) < num:
+            print("{} new VMs to launch".format(num - len(vms)))
             vms.extend(self.launch_vms(vm_type, num - len(vms)))
-            print("{} new VMs launched".format(num - len(vms)))
         workers = []
         for vid in vms:
             ip = self.vm_ip(vid)
+            monitor = Monitor.client(ip)
+            monitor.start_worker(update=False)
             worker = Worker.client(ip)
             print("{} from worker @ {}".format(worker.hello(), ip))
             workers.append(worker)
