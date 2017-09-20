@@ -27,5 +27,7 @@ if __name__ == "__main__":
     print(w0.execution_task(task=Task(5)))
     print(w0.send_file(data=Data(1024000000), target_addr=w1.ip))
     print(w1.execution_task(task=Task(2)))
+    print(w1.send_file(data=Data(1024000000), target_addr=w0.ip))
+    print(w0.execution_task(task=Task(2)))
     print("Makespan: {:.2f}s".format(timer() - start_time))
 

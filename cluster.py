@@ -70,4 +70,5 @@ class Cluster(object):
 
 if __name__ == "__main__":
     cluster = Cluster("ami-fd33459e", "sg-c86bc4ae")
-    cluster.create_workers(2)
+    worker = cluster.create_workers(1)[0]
+    print(worker.hello())
