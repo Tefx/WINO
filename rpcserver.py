@@ -112,7 +112,7 @@ class RPCClient(object):
         self.connect()
 
     def connect(self):
-        try_times = 20
+        try_times = 10
         if self.keep_alive:
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -137,7 +137,7 @@ class RPCClient(object):
     def get_port(self):
         if not self.port:
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.connect(addr)
+            sock.connect(self.worker_addr)
             port = Port(sock)
         else:
             port = self.port
@@ -176,7 +176,7 @@ class RPC(object):
         return RPCClient(cls, (addr, port), keep_alive)
 
     def hello(self):
-        return "Hello"
+        return "Hello!"
 
 
 class Remotable(object):

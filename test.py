@@ -11,8 +11,8 @@ if __name__ == "__main__":
 
     client = Worker.client(argv[1])
     print(client.hello())
-    sleep(4)
+    # sleep(4)
     monitor.start_worker(update=True)
     client = Worker.client(argv[1])
     print(client.hello())
-    print(client.send_file(data=Data(int(argv[3])), target_addr=argv[2]))
+    # print(client.send_file(data=Data(int(argv[3])), target_addr=argv[2]))
