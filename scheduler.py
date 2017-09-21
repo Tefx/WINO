@@ -34,7 +34,7 @@ class Comm(object):
         self.planned_st = planned_st
 
     def execute(self):
-        rate = gauss(85196800, 8619680 * 2.5)
+        rate = gauss(85196800, 8619680 * 2)
         gevent.sleep(ceil(self.data_size / rate))
 
     def __repr__(self):
