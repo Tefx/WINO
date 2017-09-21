@@ -68,7 +68,7 @@ HEADER_LEN = struct.calcsize(HEADER_STRUCT)
 
 
 class Worker(RPC):
-    def execution(self, task: Task) -> Task:
+    def execute(self, task: Task) -> Task:
         task.execute()
         return task
 

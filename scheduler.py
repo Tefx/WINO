@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 import json
 from copy import copy
 import heapq
@@ -57,6 +59,9 @@ class Machine(object):
 
 
 class Scheduler(object):
+    task_cls = Task
+    comm_cls = Comm
+
     def __init__(self, allow_share=False, log=False):
         self.allow_share = allow_share
         self.log = log
@@ -76,9 +81,9 @@ class Scheduler(object):
             self.machines.append(machine)
             for raw_task in raw_machine:
                 tid = raw_task["id"]
-                self.tasks[tid] = Task(tid, raw_task["runtime"],
-                                       raw_task["resources"],
-                                       raw_task["start_time"], machine)
+                self.tasks[tid] = self.task_cls(
+                    tid, raw_task["runtime"], raw_task["resources"],
+                    raw_task["start_time"], machine)
 
         for raw_machine in raw_schedule["machines"]:
             for raw_task in raw_machine:
@@ -89,8 +94,8 @@ class Scheduler(object):
                 for comm in raw_task["output"]:
                     to_task = self.tasks[comm["to_task"]]
                     to_task.remaining_prevs += 1
-                    data = Comm(task, to_task, comm["data_size"],
-                                comm["start_time"])
+                    data = self.comm_cls(task, to_task, comm["data_size"],
+                                         comm["start_time"])
                     task.outputs.append(data)
 
     def exec_task(self, task):
@@ -170,7 +175,7 @@ class Scheduler(object):
 
 if __name__ == "__main__":
     from sys import argv
-    s = Scheduler(allow_share=False, log=False)
+    s = Scheduler(allow_share=False, log=True)
     for path in argv[1:]:
         s.load(path)
         s.run()

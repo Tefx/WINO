@@ -26,9 +26,9 @@ def test_cluster():
     d12 = Data(100000000)
 
     start_time = timer()
-    w0.execution(task=t1)
+    w0.execute(task=t1)
     w1.send_to(data=d12, target_addr=w1.ip)
-    w1.execution(task=t1)
+    w1.execute(task=t1)
     print("Makespan: {:.2f}s".format(timer() - start_time))
 
 
