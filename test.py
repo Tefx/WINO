@@ -10,26 +10,28 @@ def test_monitor_and_worker():
     monitor = Monitor.client(argv[1])
     monitor.start_worker(update=False)
 
-    client = Worker.client(argv[1])
-    print(client.hello())
-    # sleep(4)
-    # monitor.start_worker(update=True)
-    # client = Worker.client(argv[1])
-    # print(client.hello())
-    print(client.send_file(data=Data(int(argv[3])), target_addr=argv[2]))
+    w = Worker.client(argv[1])
+    print(w.hello())
+    data = Data(int(argv[3]))
+    data = w.send_to(data=data, target_addr=argv[2])
+    print(data.statistic)
 
 
 def test_cluster():
     cluster = Cluster("ami-500b7d33", "sg-c86bc4ae")
-    w0, w1 = cluster.create_workers(2)
+    w0, w1 = cluster.create_workers(2, "t2.micro")
+
+    t1 = Task(5)
+    t2 = Task(3)
+    d12 = Data(100000000)
 
     start_time = timer()
-    w0.execution_task(task=Task(5))
-    w1.send_file(data=Data(1000000000), target_addr=w1.ip)
-    w1.execution_task(task=Task(2))
+    w0.execution(task=t1)
+    w1.send_to(data=d12, target_addr=w1.ip)
+    w1.execution(task=t1)
     print("Makespan: {:.2f}s".format(timer() - start_time))
 
 
 if __name__ == "__main__":
-    # test_monitor_and_worker()
-    test_cluster()
+    test_monitor_and_worker()
+    # test_cluster()

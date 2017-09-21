@@ -5,10 +5,21 @@ import subprocess
 import gevent
 from gevent import socket
 from math import ceil
-from rpcserver import RPC, Remotable
+from rpcserver import RPC, Remotable, try_connect
 import os
 from timeit import default_timer as timer
 import struct
+
+
+def bin_format(s, t):
+    if t.upper() == "KB":
+        return s / 1024
+    elif t.upper() == "MB":
+        return s / (1024**2)
+    elif t.upper() == "GB":
+        return s / (1024**3)
+    else:
+        return s
 
 
 class Task(Remotable):
@@ -21,40 +32,15 @@ class Task(Remotable):
         sleep(self.runtime)
 
 
-FILE_UNIT_SIZE = 1024 * 1024 * 10
-HEADER_STRUCT = ">Q"
-HEADER_LEN = struct.calcsize(HEADER_STRUCT)
-
-
 class Data(Remotable):
-    state = ["size"]
+    state = ["size", "runtime"]
 
     def __init__(self, size):
         self.size = size
+        self.runtime = None
 
-    def send_via_nc(self, target_addr):
-        client = Worker.client(target_addr)
-        port = client.start_nc_server()
-        cmd = "dd if=/dev/zero bs=1k count={} | nc -vq 0 {} {}".format(
-            ceil(self.size / 1024), target_addr, port)
-        proc = subprocess.run([cmd], shell=True)
-
-    def send_file(self, target_addr):
-        client = Worker.client(target_addr)
-        port = client.pick_unused_port()
-        server = gevent.spawn(client.setup_file_server, port=port)
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        try_times = 5
-        while try_times:
-            try:
-                sock.connect((target_addr, port))
-                break
-            except Exception:
-                gevent.sleep(1)
-                try_times -= 1
-        if not try_times: return False
+    def send_to(self, sock):
         start_time = timer()
-        sock.sendall(struct.pack(HEADER_STRUCT, self.size))
         fsize = self.size
         fake_data_path = os.path.join(
             os.path.abspath(os.path.dirname(__file__)), "fakedata")
@@ -63,25 +49,40 @@ class Data(Remotable):
                 buf_size = fsize if fsize < FILE_UNIT_SIZE else FILE_UNIT_SIZE
                 f.seek(0)
                 fsize -= sock.sendfile(f, 0, buf_size)
-        used_time = timer() - start_time
-        server.join()
-        sock.close()
-        print("{:.0f}MB data transferred in {:.2f}s, {:.0f}MB/s".format(
-            self.size / (1024 * 1024), used_time, self.size / (
-                used_time * 1024 * 1024)))
+        self.runtime = timer() - start_time
+
+    @property
+    def rate(self):
+        return self.size / (self.runtime)
+
+    @property
+    def statistic(self):
+        return ("{:.0f}MB data transferred in {:.2f}s, {:.0f}MB/s".format(
+            bin_format(self.size, "MB"), self.runtime,
+            bin_format(self.rate, "MB")))
+
+
+FILE_UNIT_SIZE = 1024 * 1024 * 10
+HEADER_STRUCT = ">Q"
+HEADER_LEN = struct.calcsize(HEADER_STRUCT)
 
 
 class Worker(RPC):
-    def __init__(self):
-        self._nc_server = None
-
-    def __del__(self):
-        if self._nc_server:
-            self._nc_server.terminate()
-
-    def execution_task(self, task: Task) -> Task:
+    def execution(self, task: Task) -> Task:
         task.execute()
         return task
+
+    def send_to(self, data: Data, target_addr) -> Data:
+        client = Worker.client(target_addr)
+        port = client.pick_unused_port()
+        server = gevent.spawn(client.setup_file_server, port=port)
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        if not try_connect(sock, (target_addr, port), 10, 0.2): return False
+        sock.sendall(struct.pack(HEADER_STRUCT, data.size))
+        data.send_to(sock)
+        sock.close()
+        server.join()
+        return data
 
     def pick_unused_port(self):
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -89,12 +90,6 @@ class Worker(RPC):
         _, port = s.getsockname()
         s.close()
         return port
-
-    def start_nc_server(self):
-        nc_port = self.pick_unused_port()
-        self._nc_server = subprocess.Popen(
-            ["nc", "-vl", str(nc_port)], stdout=subprocess.DEVNULL)
-        return nc_port
 
     def setup_file_server(self, port):
         listen_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -107,10 +102,6 @@ class Worker(RPC):
         while fsize:
             fsize -= sock.recv_into(buf, min(fsize, 4096))
         sock.close()
-
-    def send_file(self, data: Data, target_addr) -> Data:
-        data.send_file(target_addr)
-        return data
 
 
 if __name__ == "__main__":

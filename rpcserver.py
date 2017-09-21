@@ -29,6 +29,17 @@ def safe_send(sock, buf):
         return False
 
 
+def try_connect(sock, addr, times, intervals):
+    while times:
+        try:
+            sock.connect(addr)
+            break
+        except Exception:
+            gevent.sleep(intervals)
+            times -= 1
+    return times
+
+
 class Port(object):
     HEADER_STRUCT = ">L"
     HEADER_LEN = struct.calcsize(HEADER_STRUCT)
@@ -120,14 +131,7 @@ class RPCClient(object):
         if self.keep_alive:
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            while try_times:
-                try:
-                    sock.connect(self.worker_addr)
-                    break
-                except Exception:
-                    gevent.sleep(1)
-                    try_times -= 1
-            if try_times:
+            if try_connect(sock, self.worker_addr, 10, 1):
                 self.port = Port(sock)
             else:
                 self.port = None
@@ -159,7 +163,8 @@ class RPCClient(object):
                 msg = port.read()
                 if msg:
                     ret = load(msg)
-                    ret_cls = getattr(self.cls, func).__annotations__.get("return")
+                    ret_cls = getattr(self.cls,
+                                      func).__annotations__.get("return")
                     if ret_cls: ret = ret_cls.__load__(ret)
                     return ret
             raise ConnectionError
@@ -191,7 +196,10 @@ class Remotable(object):
 
     @classmethod
     def __load__(cls, state):
-        return cls(*state)
+        ins = cls.__new__(cls)
+        for name, value in zip(cls.state, state):
+            setattr(ins, name, value)
+        return ins
 
     def __str__(self):
         return "{}<{}>".format(self.__class__.__name__, ",".join(
