@@ -32,16 +32,14 @@ class Data(Remotable):
     def __init__(self, size):
         self.size = size
 
-    def send(self, target_addr):
+    def send_via_nc(self, target_addr):
         client = Worker.client(target_addr)
         port = client.start_nc_server()
         cmd = "dd if=/dev/zero bs=1k count={} | nc -vq 0 {} {}".format(
             ceil(self.size / 1024), target_addr, port)
-        # proc = subprocess.run([cmd], shell=True)
-        os.system(cmd)
+        proc = subprocess.run([cmd], shell=True)
 
     def send_file(self, target_addr):
-        start_time = timer()
         client = Worker.client(target_addr)
         port = client.pick_unused_port()
         server = gevent.spawn(client.setup_file_server, port=port)
@@ -55,6 +53,7 @@ class Data(Remotable):
                 gevent.sleep(1)
                 try_times -= 1
         if not try_times: return False
+        start_time = timer()
         sock.sendall(struct.pack(HEADER_STRUCT, self.size))
         fsize = self.size
         fake_data_path = os.path.join(
