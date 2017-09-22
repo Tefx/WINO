@@ -1,23 +1,26 @@
 #!/usr/bin/env python3
 
-import scheduler
-import worker
+import scheduler as s
+import worker as w
 from cluster import Cluster
 
 
-class EC2Task(scheduler.Task):
+class EC2Task(s.Task):
     def execute(self):
-        self.machine.worker.execute(task=worker.Task(self.runtime))
+        worker = w.Worker.client(self.machine.monitor.ip)
+        worker.execute(task=w.Task(self.runtime))
 
 
-class EC2Comm(scheduler.Comm):
+class EC2Comm(s.Comm):
     def execute(self):
-        self.from_task.worker.send_to(
-            data=worker.Data(self.data_size),
-            target_addr=self.to_task.worker.ip)
+        worker = w.Worker.client(self.from_task.machine.monitor.ip)
+        data = worker.send_to(
+            data=w.Data(self.data_size),
+            target_addr=self.to_task.machine.monitor.ip)
+        print(self, data.statistic)
 
 
-class EC2Scheduler(scheduler.Scheduler):
+class EC2Scheduler(s.Scheduler):
     task_cls = EC2Task
     comm_cls = EC2Comm
     ami = "ami-500b7d33"
@@ -30,13 +33,13 @@ class EC2Scheduler(scheduler.Scheduler):
 
     def prepare_workers(self):
         cluster = Cluster(self.ami, self.sgroup, self.region)
-        workers = cluster.create_workers(len(self.machines), self.vm_type)
-        for worker, machine in zip(workers, self.machines):
-            machine.worker = worker
+        monitors = cluster.create_monitors(len(self.machines), self.vm_type)
+        for monitor, machine in zip(monitors, self.machines):
+            machine.monitor = monitor
 
 
-if __name__ == "__main__":
-    from sys import argv
-    s = EC2Scheduler("t2.micro", allow_share=True, log=True)
-    s.load(argv[1])
-    s.run()
+# if __name__ == "__main__":
+    # from sys import argv
+    # s = EC2Scheduler("t2.micro", allow_share=False, log=True)
+    # s.load(argv[1])
+    # s.run()

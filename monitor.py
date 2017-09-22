@@ -21,6 +21,5 @@ class Monitor(RPC):
     def stop_worker(self):
         subprocess.run(["pkill", "-9", "-f", "worker.py"])
 
-
 if __name__ == "__main__":
     Monitor.server(sys.argv[1])

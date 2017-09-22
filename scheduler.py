@@ -36,7 +36,8 @@ class Comm(object):
         self.planned_st = planned_st
 
     def execute(self):
-        rate = gauss(85196800, 8619680 * 2)
+        # rate = gauss(85196800, 8619680 * 2)
+        rate = 125829120
         gevent.sleep(ceil(self.data_size / rate))
 
     def __repr__(self):
@@ -102,6 +103,7 @@ class Scheduler(object):
         if self.log: print("[S][{:.2f}s]{}".format(timer() - self.RST, task))
         task.machine.remove_resources(task.resources)
         task.execute()
+        self.remaining_tasks -= 1
         task.machine.add_resources(task.resources)
 
         for t in task.succs:
@@ -125,7 +127,7 @@ class Scheduler(object):
         to_task.machine.current_receiving -= 1
 
         to_task.remaining_prevs -= 1
-        if to_task.remaining_prevs:
+        if not to_task.remaining_prevs:
             self.ready_tasks.add(comm.to_task)
         if self.log: print("[F][{:.2f}s]{}".format(timer() - self.RST, comm))
         self.schedule()
@@ -145,14 +147,14 @@ class Scheduler(object):
         for t in sorted(self.ready_tasks, key=lambda t: t.planned_st):
             if t.planned_st > current_time:
                 break
-            elif self.task_is_ready(t):
+            elif self.task_is_ready(t) and t in self.ready_tasks:
                 self.ready_tasks.remove(t)
                 self.group.spawn(self.exec_task, t)
             gevent.sleep()
         for c in sorted(self.ready_comms, key=lambda c: c.planned_st):
             if c.planned_st > current_time:
                 break
-            elif self.comm_is_ready(c):
+            elif self.comm_is_ready(c) and c in self.ready_comms:
                 self.ready_comms.remove(c)
                 self.group.spawn(self.exec_comm, c)
             gevent.sleep()
@@ -161,14 +163,16 @@ class Scheduler(object):
         pass
 
     def run(self):
+        self.remaining_tasks = self.num_tasks
         self.prepare_workers()
         self.RST = timer()
         self.ready_tasks = set(
             [t for t in self.tasks.values() if not t.remaining_prevs])
         self.ready_comms = set()
         self.group = gevent.pool.Group()
-        self.schedule()
-        self.group.join()
+        while self.remaining_tasks:
+            self.schedule()
+            gevent.sleep(0.1)
         print("Makespan of {}: {:.2f}s".format(self.alg_name,
                                                timer() - self.RST))
 
