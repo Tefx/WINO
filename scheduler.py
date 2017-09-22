@@ -144,6 +144,7 @@ class Scheduler(object):
 
     def schedule(self):
         current_time = timer() - self.RST
+        # print(len(self.group), [t for t in self.tasks.values() if t.remaining_prevs])
         for t in sorted(self.ready_tasks, key=lambda t: t.planned_st):
             if t.planned_st > current_time:
                 break

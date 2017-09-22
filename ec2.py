@@ -38,8 +38,8 @@ class EC2Scheduler(s.Scheduler):
             machine.monitor = monitor
 
 
-# if __name__ == "__main__":
-    # from sys import argv
-    # s = EC2Scheduler("t2.micro", allow_share=False, log=True)
-    # s.load(argv[1])
-    # s.run()
+if __name__ == "__main__":
+    from sys import argv
+    s = EC2Scheduler("t2.micro", allow_share=True, log=True)
+    s.load(argv[1])
+    s.run()

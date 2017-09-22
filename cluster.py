@@ -35,7 +35,7 @@ class Cluster(object):
     def vm_ip(self, vid):
         return self.ec2.Instance(vid).public_dns_name
 
-    def existing_vms(self, num=20):
+    def existing_vms(self, vm_type, num=20):
         vms = []
         for vm in self.ec2.instances.filter(Filters=[{
                 "Name":
@@ -44,6 +44,9 @@ class Cluster(object):
         }, {
                 "Name": "image-id",
                 'Values': [self.ami]
+        }, {
+                "Name": "instance-type",
+                "Values": [vm_type]
         }]):
             print("Existing VM found:", vm.instance_id)
             vms.append(vm.instance_id)
@@ -52,7 +55,7 @@ class Cluster(object):
         return vms
 
     def create_vms(self, num, vm_type):
-        vms = self.existing_vms(num)
+        vms = self.existing_vms(vm_type, num)
         if len(vms) < num:
             print("{} new VMs to launch".format(num - len(vms)))
             vms.extend(self.launch_vms(vm_type, num - len(vms)))
