@@ -90,6 +90,10 @@ class Port(object):
         self._sock.shutdown(socket.SHUT_RDWR)
         self._sock.close()
 
+    @property
+    def peer_name(self):
+        return self._sock.getpeername()
+
 
 class RPCServer(object):
     def __init__(self, C, *args):
@@ -118,6 +122,7 @@ class RPCServer(object):
             port.write(os.getpid())
             message = port.read()
             if message:
+                setattr(self.instance, "_port", port)
                 port.write(self.handle(message))
             else:
                 break

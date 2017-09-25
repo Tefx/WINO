@@ -15,10 +15,10 @@ def test_monitor_and_worker():
     rproc = w.async_call("execute", task=Task(10))
     data = Data(int(argv[3]))
     data = w.send_to(data=data, target_addr=argv[2])
+    print(data.statistic)
     w.suspend(rproc)
     sleep(5)
     w.resume(rproc)
-    print(data.statistic)
     rproc.join()
 
 

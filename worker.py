@@ -32,6 +32,11 @@ class Task(Remotable):
         sleep(self.runtime)
 
 
+FILE_UNIT_SIZE = 1024 * 1024 * 10
+HEADER_STRUCT = ">Q"
+HEADER_LEN = struct.calcsize(HEADER_STRUCT)
+
+
 class Data(Remotable):
     state = ["size", "runtime"]
 
@@ -66,48 +71,37 @@ class Data(Remotable):
             bin_format(self.rate, "MB")))
 
 
-FILE_UNIT_SIZE = 1024 * 1024 * 10
-HEADER_STRUCT = ">Q"
-HEADER_LEN = struct.calcsize(HEADER_STRUCT)
-
-
 class Worker(RPC):
     def execute(self, task: Task) -> Task:
         task.execute()
         return task
 
     def send_to(self, data: Data, target_addr) -> Data:
+        listen_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        listen_sock.bind(("", 0))
+        listen_sock.listen(1000)
+        _, port = listen_sock.getsockname()
+        gevent.spawn(self.file_sending_server, listen_sock, data)
         client = Worker.client(target_addr)
-        port = client.pick_unused_port()
-        server = gevent.spawn(client.setup_file_server, port=port)
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        if not try_connect(sock, (target_addr, port), 20, 0.5): return False
+        client.receive_file(port=port)
+        return data
+
+    def file_sending_server(self, listen_sock, data):
+        sock, _ = listen_sock.accept()
         sock.sendall(struct.pack(HEADER_STRUCT, data.size))
         data.send_to(sock)
         sock.close()
-        server.join()
-        return data
 
-    def pick_unused_port(self):
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s.bind(("localhost", 0))
-        _, port = s.getsockname()
-        s.close()
-        return port
-
-    def setup_file_server(self, port):
-        listen_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        listen_sock.bind(("", port))
-        listen_sock.listen(1000)
-        sock, _ = listen_sock.accept()
+    def receive_file(self, port):
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        ip, _ = self._port.peer_name
+        if not try_connect(sock, (ip, port), 20, 0.5): return False
         header = sock.recv(HEADER_LEN)
         fsize = struct.unpack(HEADER_STRUCT, header)[0]
-        print("Got file size", fsize)
         buf = memoryview(bytearray(4096))
         while fsize:
             fsize -= sock.recv_into(buf, min(fsize, 4096))
         sock.close()
-
 
 if __name__ == "__main__":
     Worker.server()
