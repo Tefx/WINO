@@ -46,6 +46,7 @@ class Data(Remotable):
             os.path.abspath(os.path.dirname(__file__)), "fakedata")
         with open(fake_data_path, "rb") as f:
             while fsize:
+                print("SEND", fsize)
                 buf_size = fsize if fsize < FILE_UNIT_SIZE else FILE_UNIT_SIZE
                 f.seek(0)
                 try:
@@ -82,11 +83,7 @@ class Worker(RPC):
         server = gevent.spawn(client.setup_file_server, port=port)
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         if not try_connect(sock, (target_addr, port), 20, 0.5): return False
-        try:
-            sock.sendall(struct.pack(HEADER_STRUCT, data.size))
-        except Exception as e:
-            print("A", e)
-            raise e
+        sock.sendall(struct.pack(HEADER_STRUCT, data.size))
         data.send_to(sock)
         sock.close()
         server.join()
@@ -109,6 +106,7 @@ class Worker(RPC):
         print("Got file size", fsize)
         buf = memoryview(bytearray(4096))
         while fsize:
+            print("RECV", fsize)
             fsize -= sock.recv_into(buf, min(fsize, 4096))
         sock.close()
 
