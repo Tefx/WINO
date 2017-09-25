@@ -79,8 +79,9 @@ class Worker(RPC):
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         if not try_connect(sock, (target_addr, port), 20, 0.5): return False
         sock.sendall(struct.pack(HEADER_STRUCT, data.size))
-        print(sock)
+        print("S", sock)
         data.send_to(sock)
+        print("F", sock)
         sock.close()
         server.join()
         return data
