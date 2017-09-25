@@ -1,13 +1,30 @@
 import gevent
 from gevent import socket
-# import socket
 import multiprocessing
 from functools import partial, wraps
 import json
 import struct
+import os
+import signal
+from functools import partial
 
-load = json.loads
-dump = json.dumps
+
+class Remotable(object):
+    state = ()
+
+    def __dump__(self):
+        return [getattr(self, s) for s in self.state]
+
+    @classmethod
+    def __load__(cls, state):
+        ins = cls.__new__(cls)
+        for name, value in zip(cls.state, state):
+            setattr(ins, name, value)
+        return ins
+
+    def __str__(self):
+        return "{}<{}>".format(self.__class__.__name__, ",".join(
+            "{}={}".format(s, getattr(self, s)) for s in self.state))
 
 
 def safe_recv(sock, len):
@@ -40,6 +57,10 @@ def try_connect(sock, addr, times, intervals):
     return times
 
 
+load = json.loads
+dump = json.dumps
+
+
 class Port(object):
     HEADER_STRUCT = ">L"
     HEADER_LEN = struct.calcsize(HEADER_STRUCT)
@@ -58,10 +79,10 @@ class Port(object):
             chunks.append(recv)
             length -= len(recv)
         buf = b"".join(chunks).decode("utf-8")
-        return buf
+        return load(buf)
 
     def write(self, buf):
-        buf = buf.encode("utf-8")
+        buf = dump(buf).encode("utf-8")
         msg = struct.pack(self.HEADER_STRUCT, len(buf)) + buf
         return safe_send(self._sock, msg)
 
@@ -90,11 +111,11 @@ class RPCServer(object):
             proc = multiprocessing.Process(
                 target=self.handle_let, args=(sock, ))
             proc.start()
-            # gevent.spawn(self.handle_let, sock)
 
     def handle_let(self, sock):
         port = Port(sock)
         while True:
+            port.write(os.getpid())
             message = port.read()
             if message:
                 port.write(self.handle(message))
@@ -102,7 +123,7 @@ class RPCServer(object):
                 break
 
     def handle(self, message):
-        func, kwargs = load(message)
+        func, kwargs = message
         print("calling {}".format(func))
         func = getattr(self.instance, func, NotImplemented)
         for name, arg in kwargs.items():
@@ -112,7 +133,45 @@ class RPCServer(object):
         res = func(**kwargs)
         if hasattr(res, "__dump__"):
             res = res.__dump__()
-        return dump(res)
+        return res
+
+
+class RProc(object):
+    def __init__(self, func, port):
+        self.func = func
+        self.port = port
+        self.kwargs = None
+        self.let = None
+        self.remote_pid = None
+
+    def dump_args(self, kwargs):
+        for name, arg in kwargs.items():
+            if hasattr(arg, "__dump__"):
+                kwargs[name] = arg.__dump__()
+
+    def load_ret(self, ret):
+        ret_cls = self.func.__annotations__.get("return")
+        if ret_cls: ret = ret_cls.__load__(ret)
+        return ret
+
+    def __call__(self, **kwargs):
+        self.kwargs = kwargs
+        self.let = gevent.getcurrent()
+        self.remote_pid = self.port.read()
+        self.dump_args(kwargs)
+        st = self.port.write((self.func.__name__, kwargs))
+        if st:
+            msg = self.port.read()
+            if msg:
+                return self.load_ret(msg)
+
+    def join(self):
+        self.wait_for_init()
+        self.let.join()
+
+    def wait_for_init(self):
+        while not self.let:
+            gevent.sleep(0.1)
 
 
 class RPCClient(object):
@@ -120,6 +179,7 @@ class RPCClient(object):
         self.cls = C
         self.keep_alive = keep_alive
         self.worker_addr = worker_addr
+        self.running_set = []
         self.connect()
 
     @property
@@ -142,34 +202,30 @@ class RPCClient(object):
         if self.port:
             self.port.close()
 
-    def get_port(self):
-        if not self.port:
+    def get_port(self, new_port=False):
+        if not self.port or new_port:
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.connect(self.worker_addr)
+            try_connect(sock, self.worker_addr, 5, 1)
             port = Port(sock)
         else:
             port = self.port
         return port
 
     def __getattr__(self, func):
-        port = self.get_port()
+        return RProc(getattr(self.cls, func), self.get_port())
 
-        def call(**kwargs):
-            for name, arg in kwargs.items():
-                if hasattr(arg, "__dump__"):
-                    kwargs[name] = arg.__dump__()
-            st = port.write(dump((func, kwargs)))
-            if st:
-                msg = port.read()
-                if msg:
-                    ret = load(msg)
-                    ret_cls = getattr(self.cls,
-                                      func).__annotations__.get("return")
-                    if ret_cls: ret = ret_cls.__load__(ret)
-                    return ret
-            raise ConnectionError
+    def async_call(self, func, **kwargs):
+        rproc = RProc(getattr(self.cls, func), self.get_port(True))
+        gevent.spawn(rproc, **kwargs)
+        return rproc
 
-        return call
+    def suspend(self, rproc):
+        rproc.wait_for_init()
+        return RProc(self.cls.suspend, self.get_port())(pid=rproc.remote_pid)
+
+    def resume(self, rproc):
+        rproc.wait_for_init()
+        return RProc(self.cls.resume, self.get_port())(pid=rproc.remote_pid)
 
 
 class RPC(object):
@@ -187,20 +243,8 @@ class RPC(object):
     def hello(self):
         return "Hello!"
 
+    def suspend(self, pid):
+        os.kill(pid, signal.SIGSTOP)
 
-class Remotable(object):
-    state = ()
-
-    def __dump__(self):
-        return [getattr(self, s) for s in self.state]
-
-    @classmethod
-    def __load__(cls, state):
-        ins = cls.__new__(cls)
-        for name, value in zip(cls.state, state):
-            setattr(ins, name, value)
-        return ins
-
-    def __str__(self):
-        return "{}<{}>".format(self.__class__.__name__, ",".join(
-            "{}={}".format(s, getattr(self, s)) for s in self.state))
+    def resume(self, pid):
+        os.kill(pid, signal.SIGCONT)

@@ -12,9 +12,14 @@ def test_monitor_and_worker():
 
     w = Worker.client(argv[1])
     print(w.hello())
+    rproc = w.async_call("execute", task=Task(10))
     data = Data(int(argv[3]))
     data = w.send_to(data=data, target_addr=argv[2])
+    w.suspend(rproc)
+    sleep(5)
+    w.resume(rproc)
     print(data.statistic)
+    rproc.join()
 
 
 def test_cluster():
