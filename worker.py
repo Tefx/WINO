@@ -48,7 +48,11 @@ class Data(Remotable):
             while fsize:
                 buf_size = fsize if fsize < FILE_UNIT_SIZE else FILE_UNIT_SIZE
                 f.seek(0)
-                fsize -= sock.sendfile(f, 0, buf_size)
+                try:
+                    fsize -= sock.sendfile(f, 0, buf_size)
+                except Exception e:
+                    print(e)
+                    raise
         self.runtime = timer() - start_time
 
     @property
@@ -79,9 +83,7 @@ class Worker(RPC):
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         if not try_connect(sock, (target_addr, port), 20, 0.5): return False
         sock.sendall(struct.pack(HEADER_STRUCT, data.size))
-        print("S", sock)
         data.send_to(sock)
-        print("F", sock)
         sock.close()
         server.join()
         return data
@@ -96,10 +98,11 @@ class Worker(RPC):
     def setup_file_server(self, port):
         listen_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         listen_sock.bind(("", port))
-        listen_sock.listen(100)
+        listen_sock.listen(1000)
         sock, _ = listen_sock.accept()
         header = sock.recv(HEADER_LEN)
         fsize = struct.unpack(HEADER_STRUCT, header)[0]
+        print("Got file size", fsize)
         buf = memoryview(bytearray(4096))
         while fsize:
             fsize -= sock.recv_into(buf, min(fsize, 4096))
