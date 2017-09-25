@@ -3,6 +3,7 @@
 import scheduler as s
 import worker as w
 from cluster import Cluster
+from gevent import sleep
 
 
 class EC2Task(s.Task):
@@ -12,10 +13,23 @@ class EC2Task(s.Task):
 
 class EC2Comm(s.Comm):
     def execute(self):
-        data = self.from_task.machine.worker.send_to(
+        self.rproc = self.from_task.machine.worker.async_call(
+            "send_to",
             data=w.Data(self.data_size),
             target_addr=self.to_task.machine.worker.ip)
-        print(self, data.statistic)
+        self.rproc.join()
+        print(self, self.rproc.value.statistic)
+
+    def wait_for_init(self):
+        while not hasattr(self, "rproc"):
+            sleep(0.01)
+
+    def suspend(self):
+        self.wait_for_init()
+        self.from_task.machine.worker.suspend(self.rproc)
+
+    def resume(self):
+        self.from_task.machine.worker.resume(self.rproc)
 
 
 class EC2Scheduler(s.Scheduler):
@@ -33,11 +47,11 @@ class EC2Scheduler(s.Scheduler):
         cluster = Cluster(self.ami, self.sgroup, self.region)
         workers = cluster.create_workers(len(self.machines), self.vm_type)
         for worker, machine in zip(workers, self.machines):
-            machine.worker = worker 
+            machine.worker = worker
 
 
 if __name__ == "__main__":
     from sys import argv
-    s = EC2Scheduler("t2.micro", allow_share=True, log=True)
+    s = EC2Scheduler("t2.micro", allow_share=False, allow_preemptive=False, log=True)
     s.load(argv[1])
     s.run()

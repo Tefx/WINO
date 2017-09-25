@@ -173,6 +173,10 @@ class RProc(object):
         while not self.let:
             gevent.sleep(0.1)
 
+    @property
+    def value(self):
+        return self.let.value
+
 
 class RPCClient(object):
     def __init__(self, C, worker_addr, keep_alive=False):

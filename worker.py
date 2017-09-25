@@ -77,8 +77,9 @@ class Worker(RPC):
         port = client.pick_unused_port()
         server = gevent.spawn(client.setup_file_server, port=port)
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        if not try_connect(sock, (target_addr, port), 10, 0.2): return False
+        if not try_connect(sock, (target_addr, port), 20, 0.5): return False
         sock.sendall(struct.pack(HEADER_STRUCT, data.size))
+        print(sock)
         data.send_to(sock)
         sock.close()
         server.join()

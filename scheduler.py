@@ -40,6 +40,12 @@ class Comm(object):
         rate = 125829120
         gevent.sleep(ceil(self.data_size / rate))
 
+    def suspend(self):
+        pass
+
+    def resume(self):
+        pass
+
     def __repr__(self):
         return "COMM<{}=>{}>".format(self.from_task.tid, self.to_task.tid)
 
@@ -47,8 +53,36 @@ class Comm(object):
 class Machine(object):
     def __init__(self, capacities):
         self.remaining_resources = copy(capacities)
-        self.current_receiving = 0
-        self.current_sending = 0
+        self.suspended_sending = []
+        self.suspended_receiving = []
+        self.current_receiving = None
+        self.current_sending = None
+
+    def add_sending_comm(self, comm):
+        if self.current_sending:
+            self.current_sending.suspend()
+            self.suspended_sending.append(self.current_sending)
+        self.current_sending = comm
+
+    def finish_sending_comm(self):
+        if self.suspended_sending:
+            self.current_sending = self.suspended_sending.pop()
+            self.current_sending.resume()
+        else:
+            self.current_sending = None
+
+    def add_receiving_comm(self, comm):
+        if self.current_receiving:
+            self.current_receiving.suspend()
+            self.suspended_receiving.append(self.current_receiving)
+        self.current_receiving = comm
+
+    def finish_receiving_comm(self):
+        if self.suspended_receiving:
+            self.current_receiving = self.suspended_receiving.pop()
+            self.current_receiving.resume()
+        else:
+            self.current_receiving = None
 
     def remove_resources(self, resources):
         self.remaining_resources[0] -= resources[0]
@@ -63,8 +97,9 @@ class Scheduler(object):
     task_cls = Task
     comm_cls = Comm
 
-    def __init__(self, allow_share=False, log=False):
+    def __init__(self, allow_share=False, allow_preemptive=False, log=False):
         self.allow_share = allow_share
+        self.allow_preemptive = not allow_share and allow_preemptive
         self.log = log
 
     def load(self, path):
@@ -120,8 +155,9 @@ class Scheduler(object):
         to_task = comm.to_task
 
         comm.execute()
-        from_task.machine.current_sending -= 1
-        to_task.machine.current_receiving -= 1
+        if not self.allow_share:
+            from_task.machine.finish_sending_comm()
+            to_task.machine.finish_receiving_comm()
 
         to_task.remaining_prevs -= 1
         if not to_task.remaining_prevs:
@@ -129,9 +165,20 @@ class Scheduler(object):
         if self.log: print("[F][{:.2f}s]{}".format(timer() - self.RST, comm))
 
     def comm_is_ready(self, comm):
-        return self.allow_share or \
-                not (comm.from_task.machine.current_sending or
-                     comm.to_task.machine.current_receiving)
+        if self.allow_share:
+            return True
+        elif self.allow_preemptive:
+            for current_comm in [
+                    comm.from_task.machine.current_sending,
+                    comm.to_task.machine.current_receiving
+            ]:
+                current_comm = comm.from_task.machine.current_sending
+                if current_comm and current_comm.planned_ft < comm.planned_ft:
+                    return False
+            return True
+        else:
+            return not (comm.from_task.machine.current_sending
+                        or comm.to_task.machine.current_receiving)
 
     def task_is_ready(self, task):
         return all(
@@ -152,8 +199,9 @@ class Scheduler(object):
                 break
             elif self.comm_is_ready(c) and c in self.ready_comms:
                 self.ready_comms.remove(c)
-                c.from_task.machine.current_sending += 1
-                c.to_task.machine.current_receiving += 1
+                if not self.allow_share:
+                    c.from_task.machine.add_sending_comm(c)
+                    c.to_task.machine.add_receiving_comm(c)
                 self.group.spawn(self.exec_comm, c)
 
     def prepare_workers(self):
@@ -176,7 +224,7 @@ class Scheduler(object):
 
 if __name__ == "__main__":
     from sys import argv
-    s = Scheduler(allow_share=False, log=True)
+    s = Scheduler(allow_share=True, log=True)
     for path in argv[1:]:
         s.load(path)
         s.run()
