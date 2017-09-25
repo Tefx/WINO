@@ -29,14 +29,14 @@ class Task(object):
 
 
 class Comm(object):
-    def __init__(self, from_task, to_task, data_size, planned_st):
+    def __init__(self, from_task, to_task, data_size, planned_st, planned_ft):
         self.from_task = from_task
         self.to_task = to_task
         self.data_size = data_size
         self.planned_st = planned_st
+        self.planned_ft = planned_ft
 
     def execute(self):
-        # rate = gauss(85196800, 8619680 * 2)
         rate = 125829120
         gevent.sleep(ceil(self.data_size / rate))
 
@@ -96,12 +96,12 @@ class Scheduler(object):
                     to_task = self.tasks[comm["to_task"]]
                     to_task.remaining_prevs += 1
                     data = self.comm_cls(task, to_task, comm["data_size"],
-                                         comm["start_time"])
+                                         comm["start_time"],
+                                         comm["finish_time"])
                     task.outputs.append(data)
 
     def exec_task(self, task):
         if self.log: print("[S][{:.2f}s]{}".format(timer() - self.RST, task))
-        task.machine.remove_resources(task.resources)
         task.execute()
         self.remaining_tasks -= 1
         task.machine.add_resources(task.resources)
@@ -113,15 +113,12 @@ class Scheduler(object):
         for c in task.outputs:
             self.ready_comms.add(c)
         if self.log: print("[F][{:.2f}s]{}".format(timer() - self.RST, task))
-        self.schedule()
 
     def exec_comm(self, comm):
         if self.log: print("[S][{:.2f}s]{}".format(timer() - self.RST, comm))
         from_task = comm.from_task
         to_task = comm.to_task
 
-        from_task.machine.current_sending += 1
-        to_task.machine.current_receiving += 1
         comm.execute()
         from_task.machine.current_sending -= 1
         to_task.machine.current_receiving -= 1
@@ -130,7 +127,6 @@ class Scheduler(object):
         if not to_task.remaining_prevs:
             self.ready_tasks.add(comm.to_task)
         if self.log: print("[F][{:.2f}s]{}".format(timer() - self.RST, comm))
-        self.schedule()
 
     def comm_is_ready(self, comm):
         return self.allow_share or \
@@ -149,15 +145,16 @@ class Scheduler(object):
                 break
             elif self.task_is_ready(t) and t in self.ready_tasks:
                 self.ready_tasks.remove(t)
+                t.machine.remove_resources(t.resources)
                 self.group.spawn(self.exec_task, t)
-            gevent.sleep()
         for c in sorted(self.ready_comms, key=lambda c: c.planned_st):
             if c.planned_st > current_time:
                 break
             elif self.comm_is_ready(c) and c in self.ready_comms:
                 self.ready_comms.remove(c)
+                c.from_task.machine.current_sending += 1
+                c.to_task.machine.current_receiving += 1
                 self.group.spawn(self.exec_comm, c)
-            gevent.sleep()
 
     def prepare_workers(self):
         pass

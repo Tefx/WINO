@@ -7,23 +7,21 @@ from cluster import Cluster
 
 class EC2Task(s.Task):
     def execute(self):
-        worker = w.Worker.client(self.machine.monitor.ip)
-        worker.execute(task=w.Task(self.runtime))
+        self.machine.worker.execute(task=w.Task(self.runtime))
 
 
 class EC2Comm(s.Comm):
     def execute(self):
-        worker = w.Worker.client(self.from_task.machine.monitor.ip)
-        data = worker.send_to(
+        data = self.from_task.machine.worker.send_to(
             data=w.Data(self.data_size),
-            target_addr=self.to_task.machine.monitor.ip)
+            target_addr=self.to_task.machine.worker.ip)
         print(self, data.statistic)
 
 
 class EC2Scheduler(s.Scheduler):
     task_cls = EC2Task
     comm_cls = EC2Comm
-    ami = "ami-500b7d33"
+    ami = "ami-3cabdb5f"
     sgroup = "sg-c86bc4ae"
     region = "ap-southeast-1"
 
@@ -33,9 +31,9 @@ class EC2Scheduler(s.Scheduler):
 
     def prepare_workers(self):
         cluster = Cluster(self.ami, self.sgroup, self.region)
-        monitors = cluster.create_monitors(len(self.machines), self.vm_type)
-        for monitor, machine in zip(monitors, self.machines):
-            machine.monitor = monitor
+        workers = cluster.create_workers(len(self.machines), self.vm_type)
+        for worker, machine in zip(workers, self.machines):
+            machine.worker = worker 
 
 
 if __name__ == "__main__":

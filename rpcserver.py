@@ -175,7 +175,7 @@ class RProc(object):
 
 
 class RPCClient(object):
-    def __init__(self, C, worker_addr, keep_alive=True):
+    def __init__(self, C, worker_addr, keep_alive=False):
         self.cls = C
         self.keep_alive = keep_alive
         self.worker_addr = worker_addr

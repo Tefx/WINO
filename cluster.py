@@ -74,7 +74,7 @@ class Cluster(object):
     def get_worker_from_vid(self, vid):
         ip = self.vm_ip(vid)
         monitor = self.get_monitor_from_vid(vid)
-        worker = Worker.client(ip)
+        worker = Worker.client(ip, keep_alive=False)
         return worker
 
     def create_workers(self, num, vm_type="t2.micro"):
