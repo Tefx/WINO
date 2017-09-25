@@ -50,9 +50,9 @@ class Data(Remotable):
                 f.seek(0)
                 try:
                     fsize -= sock.sendfile(f, 0, buf_size)
-                except Exception e:
+                except Exception as e:
                     print(e)
-                    raise
+                    raise e
         self.runtime = timer() - start_time
 
     @property
