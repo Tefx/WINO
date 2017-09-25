@@ -46,12 +46,12 @@ class Data(Remotable):
             os.path.abspath(os.path.dirname(__file__)), "fakedata")
         with open(fake_data_path, "rb") as f:
             while fsize:
-                print("SEND", fsize)
                 buf_size = fsize if fsize < FILE_UNIT_SIZE else FILE_UNIT_SIZE
                 f.seek(0)
                 try:
                     fsize -= sock.sendfile(f, 0, buf_size)
                 except Exception as e:
+                    print("SEND", fsize)
                     print(e)
                     raise e
         self.runtime = timer() - start_time
@@ -106,7 +106,6 @@ class Worker(RPC):
         print("Got file size", fsize)
         buf = memoryview(bytearray(4096))
         while fsize:
-            print("RECV", fsize)
             fsize -= sock.recv_into(buf, min(fsize, 4096))
         sock.close()
 
