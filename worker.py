@@ -44,15 +44,14 @@ class Data(Remotable):
         fsize = self.size
         fake_data_path = os.path.join(
             os.path.abspath(os.path.dirname(__file__)), "fakedata")
-        with open(fake_data_path, "rb") as f:
+        with open("/dev/zero", "rb") as f:
             while fsize:
                 buf_size = fsize if fsize < FILE_UNIT_SIZE else FILE_UNIT_SIZE
                 f.seek(0)
                 try:
                     fsize -= sock.sendfile(f, 0, buf_size)
                 except Exception as e:
-                    print("SEND", fsize)
-                    print(e)
+                    print("SEND", fsize, e)
                     raise e
         self.runtime = timer() - start_time
 
