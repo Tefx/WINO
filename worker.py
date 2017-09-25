@@ -44,7 +44,7 @@ class Data(Remotable):
         fsize = self.size
         fake_data_path = os.path.join(
             os.path.abspath(os.path.dirname(__file__)), "fakedata")
-        with open("/dev/zero", "rb") as f:
+        with open(fake_data_path, "rb") as f:
             while fsize:
                 buf_size = fsize if fsize < FILE_UNIT_SIZE else FILE_UNIT_SIZE
                 f.seek(0)
