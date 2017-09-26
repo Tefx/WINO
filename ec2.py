@@ -16,7 +16,7 @@ class EC2Comm(s.Comm):
         self.rproc = self.from_task.machine.worker.async_call(
             "send_to",
             data=w.Data(self.data_size),
-            target_addr=self.to_task.machine.worker.ip)
+            target_addr=self.to_task.machine.worker.private_ip)
         self.rproc.join()
         print(self, self.rproc.value.statistic)
 
@@ -37,6 +37,7 @@ class EC2Scheduler(s.Scheduler):
     comm_cls = EC2Comm
     ami = "ami-3cabdb5f"
     sgroup = "sg-c86bc4ae"
+    pgroup = "wino"
     region = "ap-southeast-1"
 
     def __init__(self, vm_type, **kwargs):
@@ -44,7 +45,7 @@ class EC2Scheduler(s.Scheduler):
         super().__init__(**kwargs)
 
     def prepare_workers(self):
-        cluster = Cluster(self.ami, self.sgroup, self.region)
+        cluster = Cluster(self.ami, self.sgroup, self.region, self.pgroup)
         workers = cluster.create_workers(len(self.machines), self.vm_type)
         for worker, machine in zip(workers, self.machines):
             machine.worker = worker
@@ -53,6 +54,7 @@ class EC2Scheduler(s.Scheduler):
 if __name__ == "__main__":
     from sys import argv
     s = EC2Scheduler(
-        "t2.micro", allow_share=False, allow_preemptive=False, log=True)
+        # "t2.micro", allow_share=False, allow_preemptive=False, log=True)
+        "c4.large", allow_share=False, allow_preemptive=True, log=True)
     s.load(argv[1])
     s.run()

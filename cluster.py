@@ -3,27 +3,24 @@ from gevent import pool, sleep
 from worker import Worker
 from monitor import Monitor
 
-user_data = """#!/bin/bash
-git -C /opt/wino pull
-/opt/wino/monitor.py /opt/wino/ > /wino.log 2>&1
-"""
-
 
 class Cluster(object):
-    def __init__(self, ami, sgroup, region="ap-southeast-1"):
+    def __init__(self, ami, sgroup, region="ap-southeast-1", pgroup=None):
         self.ami = ami
         self.sg = sgroup
+        self.pg = pgroup
         self.ec2 = boto3.resource("ec2", region_name=region)
 
     def launch_vms(self, vm_type="t2.micro", vm_num=1):
+        placement = {"GroupName": self.pg} if self.pg else None
         vms = self.ec2.create_instances(
             ImageId=self.ami,
             InstanceType=vm_type,
             MinCount=vm_num,
             MaxCount=vm_num,
             KeyName="research",
-            # UserData=user_data,
-            SecurityGroupIds=[self.sg])
+            SecurityGroupIds=[self.sg],
+            Placement=placement)
         vids = [vm.instance_id for vm in vms]
         while not all(self.vm_is_ready(vid) for vid in vids):
             sleep(1)
@@ -34,6 +31,9 @@ class Cluster(object):
 
     def vm_ip(self, vid):
         return self.ec2.Instance(vid).public_dns_name
+
+    def vm_private_ip(self, vid):
+        return self.ec2.Instance(vid).private_ip_address
 
     def existing_vms(self, vm_type, num=20):
         vms = []
@@ -75,6 +75,7 @@ class Cluster(object):
         ip = self.vm_ip(vid)
         monitor = self.get_monitor_from_vid(vid)
         worker = Worker.client(ip, keep_alive=False)
+        worker.private_ip = self.vm_private_ip(vid)
         return worker
 
     def create_workers(self, num, vm_type="t2.micro"):

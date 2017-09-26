@@ -46,22 +46,13 @@ class Data(Remotable):
         self.runtime = None
 
     def send_to(self, sock):
-        start_time = timer()
         fsize = self.size
-        # fake_data_path = os.path.join(
-        # os.path.abspath(os.path.dirname(__file__)), "fakedata")
         buf = bytearray(FILE_UNIT_SIZE)
-        # with open(fake_data_path, "rb") as f:
         while fsize:
-            buf_size = fsize if fsize < FILE_UNIT_SIZE else FILE_UNIT_SIZE
-            # f.seek(0)
-            try:
-                # fsize -= sock.sendfile(f, 0, buf_size)
-                fsize -= sock.send(buf[:buf_size])
-            except Exception as e:
-                print("SEND", fsize, e)
-                raise e
-        self.runtime = timer() - start_time
+            if fsize < FILE_UNIT_SIZE:
+                fsize -= sock.send(buf[:fsize])
+            else:
+                fsize -= sock.send(buf)
 
     @property
     def rate(self):
@@ -80,6 +71,7 @@ class Worker(RPC):
         return task
 
     def send_to(self, data: Data, target_addr) -> Data:
+        start_time = timer()
         listen_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         listen_sock.bind(("", 0))
         listen_sock.listen(1)
@@ -87,6 +79,7 @@ class Worker(RPC):
         gevent.spawn(self.file_sending_server, listen_sock, data)
         client = Worker.client(target_addr)
         client.receive_file(port=port)
+        data.runtime = timer() - start_time
         return data
 
     def file_sending_server(self, listen_sock, data):
