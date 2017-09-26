@@ -260,4 +260,4 @@ class RPC(object):
         os.kill(pid, signal.SIGSTOP)
 
     def resume(self, pid):
-        os.kill(pid, signal.SIG2CONT)
+        os.kill(pid, signal.SIGCONT)

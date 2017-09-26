@@ -147,7 +147,10 @@ class Scheduler(object):
                 self.ready_tasks.add(t)
         for c in task.outputs:
             self.ready_comms.add(c)
-        if self.log: print("[F][{:.2f}s]{}".format(timer() - self.RST, task))
+        if self.log:
+            print("[F][{:.2f}s]{}[{}/{}]".format(
+                timer() - self.RST, task, self.num_tasks -
+                self.remaining_tasks, self.num_tasks))
 
     def exec_comm(self, comm):
         if self.log: print("[S][{:.2f}s]{}".format(timer() - self.RST, comm))
