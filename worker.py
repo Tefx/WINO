@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
 
-from time import sleep
+from time import sleep, time as timer
 import subprocess
 import gevent
 from gevent import socket
 from math import ceil
 from rpcserver import RPC, Remotable, try_connect
 import os
-from timeit import default_timer as timer
 import struct
 
 
