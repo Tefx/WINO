@@ -75,9 +75,10 @@ class Worker(RPC):
         listen_sock.bind(("", 0))
         listen_sock.listen(1)
         _, port = listen_sock.getsockname()
-        gevent.spawn(self.file_sending_server, listen_sock, data)
+        slet = gevent.spawn(self.file_sending_server, listen_sock, data)
         client = Worker.client(target_addr)
         client.receive_file(port=port)
+        slet.join()
         data.runtime = timer() - start_time
         return data
 
