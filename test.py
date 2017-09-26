@@ -37,6 +37,22 @@ def test_cluster():
     print("Makespan: {:.2f}s".format(timer() - start_time))
 
 
+def test_concurrent_communications(num):
+    from sys import argv
+    monitor = Monitor.client("localhost")
+    monitor.start_worker(update=False)
+    w = Worker.client("localhost")
+    rps = [
+        w.async_call(
+            "send_to", data=Data(int(argv[1])), target_addr="localhost")
+        for _ in range(num)
+    ]
+    for p in rps:
+        p.join()
+        print(p.value.statistic)
+
+
 if __name__ == "__main__":
-    test_monitor_and_worker()
+    # test_monitor_and_worker()
     # test_cluster()
+    test_concurrent_communications(100)

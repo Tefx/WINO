@@ -32,7 +32,8 @@ class Task(Remotable):
         sleep(self.runtime)
 
 
-FILE_UNIT_SIZE = 1024 * 1024 * 10
+# FILE_UNIT_SIZE = 1024 * 1024 * 10
+FILE_UNIT_SIZE = 4096
 HEADER_STRUCT = ">Q"
 HEADER_LEN = struct.calcsize(HEADER_STRUCT)
 
@@ -47,17 +48,19 @@ class Data(Remotable):
     def send_to(self, sock):
         start_time = timer()
         fsize = self.size
-        fake_data_path = os.path.join(
-            os.path.abspath(os.path.dirname(__file__)), "fakedata")
-        with open(fake_data_path, "rb") as f:
-            while fsize:
-                buf_size = fsize if fsize < FILE_UNIT_SIZE else FILE_UNIT_SIZE
-                f.seek(0)
-                try:
-                    fsize -= sock.sendfile(f, 0, buf_size)
-                except Exception as e:
-                    print("SEND", fsize, e)
-                    raise e
+        # fake_data_path = os.path.join(
+        # os.path.abspath(os.path.dirname(__file__)), "fakedata")
+        buf = bytearray(FILE_UNIT_SIZE)
+        # with open(fake_data_path, "rb") as f:
+        while fsize:
+            buf_size = fsize if fsize < FILE_UNIT_SIZE else FILE_UNIT_SIZE
+            # f.seek(0)
+            try:
+                # fsize -= sock.sendfile(f, 0, buf_size)
+                fsize -= sock.send(buf[:buf_size])
+            except Exception as e:
+                print("SEND", fsize, e)
+                raise e
         self.runtime = timer() - start_time
 
     @property
@@ -79,7 +82,7 @@ class Worker(RPC):
     def send_to(self, data: Data, target_addr) -> Data:
         listen_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         listen_sock.bind(("", 0))
-        listen_sock.listen(1000)
+        listen_sock.listen(1)
         _, port = listen_sock.getsockname()
         gevent.spawn(self.file_sending_server, listen_sock, data)
         client = Worker.client(target_addr)
@@ -102,6 +105,7 @@ class Worker(RPC):
         while fsize:
             fsize -= sock.recv_into(buf, min(fsize, 4096))
         sock.close()
+
 
 if __name__ == "__main__":
     Worker.server()

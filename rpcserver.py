@@ -68,6 +68,9 @@ class Port(object):
     def __init__(self, sock):
         self._sock = sock
 
+    def __del__(self):
+        self._sock.close()
+
     def read(self):
         header = safe_recv(self._sock, self.HEADER_LEN)
         if not header: return False
@@ -175,7 +178,7 @@ class RProc(object):
         self.let.join()
 
     def wait_for_init(self):
-        while not self.let:
+        while self.let is None:
             gevent.sleep(0.1)
 
     @property
@@ -210,6 +213,7 @@ class RPCClient(object):
     def shutdown(self):
         if self.port:
             self.port.close()
+            self.port = None
 
     def get_port(self, new_port=False):
         if not self.port or new_port:
@@ -256,4 +260,4 @@ class RPC(object):
         os.kill(pid, signal.SIGSTOP)
 
     def resume(self, pid):
-        os.kill(pid, signal.SIGCONT)
+        os.kill(pid, signal.SIG2CONT)
