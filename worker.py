@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from time import sleep, time as timer
+from time import sleep, perf_counter as timer
 import subprocess
 import gevent
 from gevent import socket
@@ -55,7 +55,7 @@ class Data(Remotable):
 
     @property
     def rate(self):
-        return self.size / (self.runtime)
+        return self.size / self.runtime
 
     @property
     def statistic(self):

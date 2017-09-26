@@ -55,6 +55,6 @@ if __name__ == "__main__":
     from sys import argv
     s = EC2Scheduler(
         # "t2.micro", allow_share=False, allow_preemptive=False, log=True)
-        "c4.large", allow_share=False, allow_preemptive=True, log=True)
+        "c4.large", allow_share=False, allow_preemptive=False, log=True)
     s.load(argv[1])
     s.run()
