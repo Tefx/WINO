@@ -4,10 +4,12 @@ import json
 from copy import copy
 import heapq
 import gevent.pool
+from gevent.lock import BoundedSemaphore
 from timeit import default_timer as timer
 from math import ceil
 import os.path
 from random import gauss
+from tqdm import tqdm
 
 
 class Task(object):
@@ -15,6 +17,7 @@ class Task(object):
         self.tid = tid
         self.runtime = runtime
         self.resources = resources
+        self.resources[0] = int(self.resources[0] * 1000)
         self.planned_st = planned_st
         self.machine = machine
         self.succs = []
@@ -25,7 +28,7 @@ class Task(object):
         gevent.sleep(self.runtime)
 
     def __repr__(self):
-        return "Task<{}>".format(self.tid)
+        return "Task<{}>[{}s]".format(self.tid, self.runtime)
 
 
 class Comm(object):
@@ -53,36 +56,47 @@ class Comm(object):
 class Machine(object):
     def __init__(self, capacities):
         self.remaining_resources = copy(capacities)
+        self.remaining_resources[0] = (self.remaining_resources[0] * 1000)
         self.suspended_sending = []
         self.suspended_receiving = []
         self.current_receiving = None
         self.current_sending = None
+        self.sending_lock = BoundedSemaphore(1)
+        self.receiving_lock = BoundedSemaphore(1)
 
     def add_sending_comm(self, comm):
+        self.sending_lock.acquire()
         if self.current_sending:
             self.current_sending.suspend()
             self.suspended_sending.append(self.current_sending)
         self.current_sending = comm
+        self.sending_lock.release()
 
     def finish_sending_comm(self):
+        self.sending_lock.acquire()
         if self.suspended_sending:
             self.current_sending = self.suspended_sending.pop()
             self.current_sending.resume()
         else:
             self.current_sending = None
+        self.sending_lock.release()
 
     def add_receiving_comm(self, comm):
+        self.receiving_lock.acquire()
         if self.current_receiving:
-            self.current_receiving.suspend()
             self.suspended_receiving.append(self.current_receiving)
+            self.current_receiving.suspend()
         self.current_receiving = comm
+        self.receiving_lock.release()
 
     def finish_receiving_comm(self):
+        self.receiving_lock.acquire()
         if self.suspended_receiving:
             self.current_receiving = self.suspended_receiving.pop()
             self.current_receiving.resume()
         else:
             self.current_receiving = None
+        self.receiving_lock.release()
 
     def remove_resources(self, resources):
         self.remaining_resources[0] -= resources[0]
@@ -97,10 +111,10 @@ class Scheduler(object):
     task_cls = Task
     comm_cls = Comm
 
-    def __init__(self, allow_share=False, allow_preemptive=False, log=False):
+    def __init__(self, allow_share=False, allow_preemptive=False):
         self.allow_share = allow_share
         self.allow_preemptive = not allow_share and allow_preemptive
-        self.log = log
+        self.log = False
 
     def load(self, path):
         self.alg_name = os.path.basename(path)[:-9]
@@ -109,6 +123,8 @@ class Scheduler(object):
         self.num_tasks = raw_schedule["num_tasks"]
         num_machines = len(raw_schedule["machines"])
         capacities = raw_schedule["vm_capacities"]
+        self.allow_share = self.allow_share or raw_schedule["allow_share"]
+        self.allow_preemptive = self.allow_preemptive or raw_schedule["allow_preemptive"]
 
         self.tasks = {}
         self.machines = []
@@ -207,22 +223,32 @@ class Scheduler(object):
                     c.to_task.machine.add_receiving_comm(c)
                 self.group.spawn(self.exec_comm, c)
 
-    def prepare_workers(self):
+    def prepare_workers(self, **kwargs):
         pass
 
-    def run(self):
+    def run(self, log="d", **kwargs):
         self.remaining_tasks = self.num_tasks
-        self.prepare_workers()
+        self.prepare_workers(verbose=(log == "d"), **kwargs)
         self.RST = timer()
         self.ready_tasks = set(
             [t for t in self.tasks.values() if not t.remaining_prevs])
         self.ready_comms = set()
         self.group = gevent.pool.Group()
+        if log == "d": self.log = True
+        elif log == "p":
+            pbar = tqdm(
+                total=self.num_tasks-1,
+                unit="task",
+                desc="{:<32}".format(self.alg_name))
         while self.remaining_tasks:
             self.schedule()
+            if log == "p":
+                pbar.update(self.num_tasks - self.remaining_tasks - pbar.n)
             gevent.sleep(0.1)
-        print("Makespan of {}: {:.2f}s".format(self.alg_name,
-                                               timer() - self.RST))
+        if log == "p": pbar.close()
+        else:
+            print("Makespan of {}: {:.2f}s".format(self.alg_name,
+                                                   timer() - self.RST))
 
 
 if __name__ == "__main__":

@@ -4,6 +4,7 @@ import scheduler as s
 import worker as w
 from cluster import Cluster
 from gevent import sleep
+from time import time
 
 
 class EC2Task(s.Task):
@@ -18,7 +19,7 @@ class EC2Comm(s.Comm):
             data=w.Data(self.data_size),
             target_addr=self.to_task.machine.worker.private_ip)
         self.rproc.join()
-        print(self, self.rproc.value.statistic)
+        # print(self, self.rproc.value.statistic)
 
     def wait_for_init(self):
         while not hasattr(self, "rproc"):
@@ -37,15 +38,15 @@ class EC2Scheduler(s.Scheduler):
     comm_cls = EC2Comm
     ami = "ami-3cabdb5f"
     sgroup = "sg-c86bc4ae"
-    pgroup = "wino"
     region = "ap-southeast-1"
+    pgroup = "wino"
 
-    def __init__(self, vm_type, **kwargs):
+    def __init__(self, vm_type):
         self.vm_type = vm_type
-        super().__init__(**kwargs)
+        super().__init__()
 
-    def prepare_workers(self):
-        cluster = Cluster(self.ami, self.sgroup, self.region, self.pgroup)
+    def prepare_workers(self, **kwargs):
+        cluster = Cluster(self.ami, self.sgroup, self.region, self.pgroup, **kwargs)
         workers = cluster.create_workers(len(self.machines), self.vm_type)
         for worker, machine in zip(workers, self.machines):
             machine.worker = worker
@@ -53,8 +54,8 @@ class EC2Scheduler(s.Scheduler):
 
 if __name__ == "__main__":
     from sys import argv
-    s = EC2Scheduler(
-        # "t2.micro", allow_share=False, allow_preemptive=False, log=True)
-        "c4.large", allow_share=False, allow_preemptive=False, log=True)
-    s.load(argv[1])
-    s.run()
+    for path in argv[1:]:
+        # s = EC2Scheduler("c4.large")
+        s = EC2Scheduler("t2.micro")
+        s.load(path)
+        s.run(log="p")

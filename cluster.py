@@ -5,22 +5,28 @@ from monitor import Monitor
 
 
 class Cluster(object):
-    def __init__(self, ami, sgroup, region="ap-southeast-1", pgroup=None):
+    def __init__(self,
+                 ami,
+                 sgroup,
+                 region="ap-southeast-1",
+                 pgroup=None,
+                 verbose=False):
         self.ami = ami
         self.sg = sgroup
         self.pg = pgroup
         self.ec2 = boto3.resource("ec2", region_name=region)
+        self.verbose = verbose
 
     def launch_vms(self, vm_type="t2.micro", vm_num=1):
-        placement = {"GroupName": self.pg} if self.pg else None
+        placement = {"GroupName": self.pg} if not vm_type.startswith("t2.") else {}
         vms = self.ec2.create_instances(
             ImageId=self.ami,
             InstanceType=vm_type,
             MinCount=vm_num,
             MaxCount=vm_num,
             KeyName="research",
-            SecurityGroupIds=[self.sg],
-            Placement=placement)
+            Placement=placement,
+            SecurityGroupIds=[self.sg])
         vids = [vm.instance_id for vm in vms]
         while not all(self.vm_is_ready(vid) for vid in vids):
             sleep(1)
@@ -48,7 +54,7 @@ class Cluster(object):
                 "Name": "instance-type",
                 "Values": [vm_type]
         }]):
-            print("Existing VM found:", vm.instance_id)
+            if self.verbose: print("Existing VM found:", vm.instance_id)
             vms.append(vm.instance_id)
             if len(vms) == num:
                 break
@@ -57,12 +63,13 @@ class Cluster(object):
     def create_vms(self, num, vm_type):
         vms = self.existing_vms(vm_type, num)
         if len(vms) < num:
-            print("{} new VMs to launch".format(num - len(vms)))
+            if self.verbose:
+                print("{} new VMs to launch".format(num - len(vms)))
             vms.extend(self.launch_vms(vm_type, num - len(vms)))
         return vms
 
     def get_monitor_from_vid(self, vid):
-        print("Connecting to monitor@{}".format(vid))
+        if self.verbose: print("Connecting to monitor@{}".format(vid))
         monitor = Monitor.client(self.vm_ip(vid))
         monitor.start_worker(update=True)
         return monitor
