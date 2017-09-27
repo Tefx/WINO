@@ -36,7 +36,7 @@ class EC2Comm(s.Comm):
 class EC2Scheduler(s.Scheduler):
     task_cls = EC2Task
     comm_cls = EC2Comm
-    ami = "ami-3cabdb5f"
+    ami = "ami-f796e594"
     sgroup = "sg-c86bc4ae"
     region = "ap-southeast-1"
     pgroup = "wino"
@@ -55,7 +55,7 @@ class EC2Scheduler(s.Scheduler):
 if __name__ == "__main__":
     from sys import argv
     for path in argv[1:]:
-        # s = EC2Scheduler("c4.large")
-        s = EC2Scheduler("t2.micro")
+        s = EC2Scheduler("c4.large")
+        # s = EC2Scheduler("t2.micro")
         s.load(path)
         s.run(log="p")
