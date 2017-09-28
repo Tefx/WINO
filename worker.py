@@ -32,7 +32,7 @@ class Task(Remotable):
 
 
 # FILE_UNIT_SIZE = 1024 * 1024 * 10
-FILE_UNIT_SIZE = 4096
+FILE_UNIT_SIZE = 8192
 HEADER_STRUCT = ">Q"
 HEADER_LEN = struct.calcsize(HEADER_STRUCT)
 
@@ -94,9 +94,9 @@ class Worker(RPC):
         if not try_connect(sock, (ip, port), 20, 0.5): return False
         header = sock.recv(HEADER_LEN)
         fsize = struct.unpack(HEADER_STRUCT, header)[0]
-        buf = memoryview(bytearray(4096))
+        buf = memoryview(bytearray(FILE_UNIT_SIZE))
         while fsize:
-            fsize -= sock.recv_into(buf, min(fsize, 4096))
+            fsize -= sock.recv_into(buf, min(fsize, FILE_UNIT_SIZE))
         sock.close()
 
 
