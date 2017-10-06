@@ -209,14 +209,14 @@ class Scheduler(object):
         for t in sorted(self.ready_tasks, key=lambda t: t.planned_st):
             if t.planned_st > current_time:
                 break
-            elif self.task_is_ready(t) and t in self.ready_tasks:
+            if self.task_is_ready(t) and t in self.ready_tasks:
                 self.ready_tasks.remove(t)
                 t.machine.remove_resources(t.resources)
                 self.group.spawn(self.exec_task, t)
         for c in sorted(self.ready_comms, key=lambda c: c.planned_st):
             if c.planned_st > current_time:
                 break
-            elif self.comm_is_ready(c) and c in self.ready_comms:
+            if self.comm_is_ready(c) and c in self.ready_comms:
                 self.ready_comms.remove(c)
                 if not self.allow_share:
                     c.from_task.machine.add_sending_comm(c)
